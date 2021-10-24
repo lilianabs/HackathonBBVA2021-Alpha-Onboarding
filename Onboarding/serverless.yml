@@ -1,0 +1,223 @@
+service: onboarding
+frameworkVersion: '2'
+provider:
+  name: aws
+  runtime: python3.7
+  lambdaHashingVersion: 20201221
+  region: us-east-1
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:DescribeTable
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - cognito-idp:AdminInitiateAuth
+            - cognito-idp:AdminGetUser
+            - s3:*
+            - rekognition:CompareFaces
+            - kms:*
+          Resource:
+            - '*'
+  environment:
+    USER_POOL_ID: 'us-east-1_Fey5pBbYQ'
+    CLIENT_ID: '3166285fgjmorr3vcciban3ru3'
+    CLIENT_SECRET: '1spfsmad0311i46912a0kpptjemrg1chbuv4e1iebkkf4ka73jsd'
+    DYNAMODB_TABLE_USUARIOS: onb-usuarios
+    DYNAMODB_TABLE_DOCUMENTOS: onb-documentos
+    S3_BUCKET_DOCUMENTOS: onb-documentos
+    REKOGNITION_COLLECTION_NAME: onb
+    DYNAMODB_TABLE_CIPHER: onb-llaves
+
+functions:
+  signUp:
+    handler: src/dynamo/usuarios/crearUsuario.crearUsuario
+    name: signUp
+    description: Lambda for signing up in cognito
+    events:
+      - http:
+          path: user/sign-up
+          method: post
+          cors: true
+          integration: lambda
+  confirmSignUp:
+    handler: src/cognito/confirmSignUp.confirmSignUp
+    name: confirmSignUp
+    description: Lambda for confirm the sign up in cognito
+    events:
+      - http:
+          path: user/confirm-sign-up
+          method: post
+          cors: true
+          integration: lambda
+  login:
+    handler: src/cognito/login.login
+    name: login
+    description: Make login
+    events:
+      - http:
+          path: user/login
+          method: post
+          cors: true
+          integration: lambda
+  uploadId:
+    handler: src/s3/documentos/uploadIdCard.uploadId
+    name: uploadId
+    description: upload file that proves Identity
+    events:
+      - http:
+          path: documents/id
+          method: post
+          cors: true
+          integration: lambda
+          authorizer:
+            arn: arn:aws:cognito-idp:us-east-1:597305856578:userpool/us-east-1_Fey5pBbYQ
+  uploadSignature:
+    handler: src/s3/documentos/uploadSignature.uploadSiganture
+    name: uploadSignature
+    description: upload signature photo that proves Identity
+    events:
+      - http:
+          path: documents/signature
+          method: post
+          cors: true
+          integration: lambda
+          authorizer:
+            arn: arn:aws:cognito-idp:us-east-1:597305856578:userpool/us-east-1_Fey5pBbYQ
+  uploadSelfie:
+    handler: src/s3/documentos/uploadSelfie.uploadSelfie
+    name: uploadSelfie
+    description: upload selfie taken in the moment
+    events:
+      - http:
+          path: documents/selfie
+          method: post
+          cors: true
+          integration: lambda
+          authorizer:
+            arn: arn:aws:cognito-idp:us-east-1:597305856578:userpool/us-east-1_Fey5pBbYQ
+  signatureMask:
+    handler: src/algoritmos/signatureMask.signatureMask
+    name: signatureMask
+    layers:
+      - arn:aws:lambda:us-east-1:597305856578:layer:python-opencv:5
+    description: get signature mask
+    events:
+      - http:
+          path: algoritms/signature
+          method: post
+          cors: true
+          integration: lambda
+          authorizer:
+            arn: arn:aws:cognito-idp:us-east-1:597305856578:userpool/us-east-1_Fey5pBbYQ
+  faceBiometric:
+    handler: src/rekognition/compareFaces.compareFaces
+    name: createRekognitionCollection
+    description: compare face with id
+    events:
+      - http:
+          path: rekognition/biometric
+          method: post
+          cors: true
+          integration: lambda
+          authorizer:
+            arn: arn:aws:cognito-idp:us-east-1:597305856578:userpool/us-east-1_Fey5pBbYQ
+  uploadRUT:
+    handler: src/s3/documentos/uploadRUT.uploadRUT
+    name: uploadRUT
+    description: upload RUT
+    events:
+      - http:
+          path: documents/RUT
+          method: post
+          cors: true
+          integration: lambda
+          authorizer:
+            arn: arn:aws:cognito-idp:us-east-1:597305856578:userpool/us-east-1_Fey5pBbYQ
+  uploadCamCom:
+    handler: src/s3/documentos/uploadCamCom.uploadCamCom
+    name: uploadCamCom
+    description: upload Camara de Comercio
+    events:
+      - http:
+          path: documents/CamCom
+          method: post
+          cors: true
+          integration: lambda
+          authorizer:
+            arn: arn:aws:cognito-idp:us-east-1:597305856578:userpool/us-east-1_Fey5pBbYQ
+  eSignature:
+    handler: src/kms/createKey.createKey
+    name: createKey
+    description: create key
+    events:
+      - http:
+          path: kms/key
+          method: post
+          cors: true
+          integration: lambda
+          authorizer:
+            arn: arn:aws:cognito-idp:us-east-1:597305856578:userpool/us-east-1_Fey5pBbYQ
+
+
+
+resources:
+  Resources:
+    UsuariosDynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_TABLE_USUARIOS}
+    DocumentosUsuarios:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_TABLE_DOCUMENTOS}
+    CipherKeys:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_TABLE_CIPHER}
+
+    Onboarding:
+      Type: 'AWS::S3::Bucket'
+      Properties:
+          BucketName: ${self:provider.environment.S3_BUCKET_DOCUMENTOS}
